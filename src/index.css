@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
@@ -86,7 +89,13 @@ button:focus-visible {
 }
 
 .btn-check { 
-  background-color: transparent !important; 
+  background-color: transparent !important;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2) !important;
+  transition: all 0.2s ease !important;
+}
+.btn-check:hover {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3) !important;
+  transform: scale(1.05) !important;
 }
 
 /* 自定義按鈕活動狀態 */
@@ -139,4 +148,46 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+/* 增加登錄表單文字對比度 */
+.auth-form-input {
+  color: #333 !important;
+  background-color: #fff !important;
+}
+
+.auth-form-button {
+  color: #fff !important;
+  background-color: #4F46E5 !important;
+}
+
+.auth-google-button {
+  color: #333 !important;
+  background-color: #fff !important;
+  border: 1px solid #ddd !important;
+}
+
+.auth-google-button span {
+  color: #333 !important;
+  font-weight: 500 !important;
+}
+
+/* 增強設定圖標可見度 */
+.fa-cog {
+  color: #ffffff !important;
+  text-shadow: 0px 0px 3px rgba(0, 0, 0, 0.5), 0px 0px 5px rgba(255, 255, 255, 0.5);
+  font-weight: 900 !important;
+  font-size: 1.5rem !important;
+}
+
+/* 按鈕 */
+.btn-check {
+  background-color: transparent;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  transition: all 0.2s ease;
+}
+
+.btn-check:hover {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+  transform: scale(1.05);
 }

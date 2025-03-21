@@ -1,22 +1,127 @@
 // The exported code uses Tailwind CSS. Install Tailwind CSS in your dev environment to ensure all styles work.
 import React, { useState, useEffect } from 'react';
 import * as echarts from 'echarts';
+import { User } from 'firebase/auth';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Auth from './components/Auth';
+import UserProfile from './components/UserProfile';
+import { addTaskToFirestore, getUserTasks, updateTaskInFirestore, deleteTaskFromFirestore } from './firebase';
+
+// 添加日期格式化功能
+const formatDate = (dateString: string | undefined): string => {
+    if (!dateString) return '無日期';
+    const date = new Date(dateString);
+    return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+};
+
+// 檢查任務是否即將到期 (3天内)
+const isUpcoming = (dateString: string | undefined): boolean => {
+    if (!dateString) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(dateString);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = dueDate.getTime() - today.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    
+    return diffDays >= 0 && diffDays <= 3;
+};
+
+// 檢查任務是否已過期
+const isOverdue = (dateString: string | undefined): boolean => {
+    if (!dateString) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(dateString);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    return dueDate < today;
+};
+
 interface Task {
     id: string;
     text: string;
     completed: boolean;
-    dueDate?: string;
-    priority: 'low' | 'medium' | 'high';
+    dueDate: string;
     category: string;
 }
-const App: React.FC = () => {
+
+// 定義類別和對應的顏色
+const categoryColors: Record<string, {bg: string, text: string, icon: string}> = {
+    '工作': {bg: 'bg-blue-100', text: 'text-blue-600', icon: 'fas fa-briefcase'},
+    '學習': {bg: 'bg-yellow-100', text: 'text-yellow-600', icon: 'fas fa-book'},
+    '生活': {bg: 'bg-green-100', text: 'text-green-600', icon: 'fas fa-home'},
+    '健康': {bg: 'bg-red-100', text: 'text-red-600', icon: 'fas fa-heartbeat'},
+    '娛樂': {bg: 'bg-purple-100', text: 'text-purple-600', icon: 'fas fa-gamepad'},
+    '約會': {bg: 'bg-pink-100', text: 'text-pink-600', icon: 'fas fa-heart'},
+    '開會': {bg: 'bg-indigo-100', text: 'text-indigo-600', icon: 'fas fa-users'},
+    '其他': {bg: 'bg-gray-100', text: 'text-gray-600', icon: 'fas fa-ellipsis-h'}
+};
+
+// 主應用程序組件
+const AppContent: React.FC = () => {
+    const { currentUser, isLoading, authError } = useAuth();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [newTask, setNewTask] = useState('');
     const [activeFilter, setActiveFilter] = useState('all');
     const [showAddModal, setShowAddModal] = useState(false);
-    const [selectedPriority, setSelectedPriority] = useState<'low' | 'medium' | 'high'>('medium');
-    const [selectedCategory, setSelectedCategory] = useState('personal');
+    const [selectedCategory, setSelectedCategory] = useState('工作');
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const [dueDate, setDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [isTasksLoading, setIsTasksLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    // 處理身份驗證錯誤
+    useEffect(() => {
+        if (authError) {
+            setErrorMessage(`身份驗證錯誤: ${authError}`);
+            console.error("認證錯誤:", authError);
+            
+            // 如果是配置錯誤，添加更具體的幫助信息
+            if (authError.includes("配置錯誤") || authError.includes("API 密鑰無效")) {
+                setErrorMessage(`${authError}。請檢查 Firebase 配置。`);
+            }
+        } else {
+            setErrorMessage(null);
+        }
+    }, [authError]);
+
+    // 載入用戶任務
+    useEffect(() => {
+        const loadTasks = async () => {
+            if (currentUser?.uid) {
+                setIsTasksLoading(true);
+                try {
+                    const userTasks = await getUserTasks(currentUser.uid);
+                    setTasks(userTasks as Task[]);
+                    setErrorMessage(null);
+                } catch (error: any) {
+                    console.error('加載任務失敗:', error);
+                    
+                    // 提供更具體的錯誤信息
+                    if (error.message && error.message.includes('permission')) {
+                        setErrorMessage('權限錯誤：您沒有足夠的權限讀取任務。可能需要重新登錄或等待 Firestore 規則生效（大約 1 分鐘）。');
+                    } else if (error.code === 'permission-denied') {
+                        setErrorMessage('權限錯誤：您沒有足夠的權限讀取任務。可能需要重新登錄或等待 Firestore 規則生效（大約 1 分鐘）。');
+                    } else {
+                        setErrorMessage(`加載任務失敗: ${error.message || '未知錯誤'}`);
+                    }
+                } finally {
+                    setIsTasksLoading(false);
+                }
+            }
+        };
+
+        if (currentUser) {
+            loadTasks();
+        } else {
+            // 如果沒有當前用戶，清空任務列表
+            setTasks([]);
+        }
+    }, [currentUser]);
+
+    // 初始化圖表
     useEffect(() => {
         const chartDom = document.getElementById('taskProgressChart');
         if (chartDom) {
@@ -65,67 +170,144 @@ const App: React.FC = () => {
                 ],
             };
             myChart.setOption(option);
+
+            // 清理函數
+            return () => {
+                myChart.dispose();
+            };
         }
     }, [tasks]);
-    const addTask = () => {
-        if (newTask.trim()) {
-            const task: Task = {
-                id: Date.now().toString(),
+
+    // 添加任務
+    const addTask = async () => {
+        if (newTask.trim() && currentUser?.uid) {
+            const taskData = {
                 text: newTask,
                 completed: false,
-                dueDate: new Date().toISOString().split('T')[0],
-                priority: selectedPriority,
+                dueDate: dueDate,
                 category: selectedCategory,
+                createdAt: new Date()
             };
-            setTasks([...tasks, task]);
-            setNewTask('');
-            setShowAddModal(false);
+
+            try {
+                const addedTask = await addTaskToFirestore(currentUser.uid, taskData);
+                setTasks([addedTask as Task, ...tasks]);
+                setNewTask('');
+                setShowAddModal(false);
+            } catch (error) {
+                console.error('添加任務失敗:', error);
+            }
         }
     };
-    const toggleComplete = (taskId: string) => {
-        setTasks(
-            tasks.map((task)=>
-                task.id === taskId ? { ...task, completed: !task.completed } : task,
-            ),
-        );
+
+    // 切換任務完成狀態
+    const toggleComplete = async (taskId: string) => {
+        if (!currentUser?.uid) return;
+
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const updatedTask = { ...task, completed: !task.completed };
+        
+        try {
+            await updateTaskInFirestore(taskId, { completed: !task.completed });
+            setTasks(
+                tasks.map((t) => (t.id === taskId ? updatedTask : t))
+            );
+        } catch (error) {
+            console.error('更新任務失敗:', error);
+        }
     };
-    const deleteTask = (taskId: string) => {
-        setTasks(tasks.filter(task => task.id !== taskId));
+
+    // 刪除任務
+    const deleteTask = async (taskId: string) => {
+        if (!currentUser?.uid) return;
+
+        try {
+            await deleteTaskFromFirestore(taskId);
+            setTasks(tasks.filter(task => task.id !== taskId));
+        } catch (error) {
+            console.error('刪除任務失敗:', error);
+        }
     };
+
+    // 過濾任務
     const filteredTasks = tasks.filter(task => {
         if (activeFilter === 'completed') return task.completed;
         if (activeFilter === 'active') return !task.completed;
         return true;
     });
+
+    // 處理登出
+    const handleLogout = () => {
+        setTasks([]);
+        setErrorMessage(null);
+        setShowProfileMenu(false);
+    };
+
+    // 處理登錄成功
+    const handleLoginSuccess = () => {
+        setErrorMessage(null);
+    };
+
+    // 關閉錯誤消息
+    const handleCloseError = () => {
+        setErrorMessage(null);
+    };
+
+    // 當用戶未驗證時顯示登錄頁面
+    if (!currentUser && !isLoading) {
+        return <Auth onLogin={handleLoginSuccess} />;
+    }
+
+    // 顯示加載指示器
+    if (isLoading) {
+        return (
+            <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-slate-100 to-white">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
+                    <p className="mt-4 text-lg text-gray-600">載入中...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // 主應用界面
     return (
         <div className="min-h-screen w-full bg-gradient-to-b from-slate-100 to-white">
+            {errorMessage && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded fixed top-4 right-4 left-4 z-50 flex justify-between items-center">
+                    <span className="block sm:inline">{errorMessage}</span>
+                    <button 
+                        className="ml-4 px-3 py-1 text-red-700 hover:bg-red-200 rounded-lg" 
+                        onClick={handleCloseError}
+                    >
+                        <i className="fas fa-times"></i>
+                    </button>
+                </div>
+            )}
+            
             <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row items-center justify-between mb-6 sm:mb-8">
+                {/* 頂部導航欄 */}
+                <div className="flex items-center justify-between mb-6 sm:mb-8">
                     <div className="flex items-center">
                         <h1 className="text-3xl font-bold text-gray-800">待辦事項</h1>
                     </div>
-                    <div className="relative mt-2 sm:mt-0">
-                        <button
-                            className="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center cursor-pointer btn-white"
-                            onClick={() => setShowProfileMenu(!showProfileMenu)}
-                        >
-                            <i className="fas fa-user text-gray-600"></i>
-                        </button>
-                        {showProfileMenu && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-10">
-                                <a href="https://readdy.ai/home/1d6ca75c-d40b-4dbb-b5c6-d766ce17cf42/857a552b-6350-4be6-95f7-26c9800972fe" data-readdy="true" className="block px-4 py-2 text-gray-700 hover:bg-blue-50">個人資料</a>
-                                <a href="#" className="block px-4 py-2 text-gray-700 hover:bg-blue-50">登出</a>
-                            </div>
-                        )}
-                    </div>
+                    <UserProfile 
+                        user={currentUser} 
+                        onLogout={handleLogout}
+                        showMenu={showProfileMenu}
+                        toggleMenu={() => setShowProfileMenu(!showProfileMenu)}
+                    />
                 </div>
-                {/* Progress Chart */}
+
+                {/* 進度圖表 */}
                 <div className="mb-6 sm:mb-8 bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 border border-slate-200">
                     <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-3 sm:mb-4">任務進度</h2>
                     <div id="taskProgressChart" style={{ height: '180px' }}></div>
                 </div>
-                {/* Task Filters */}
+
+                {/* 篩選按鈕 */}
                 <div className="flex flex-wrap gap-2 mb-6">
                     {[
                         { key: 'all', label: '全部' },
@@ -145,7 +327,8 @@ const App: React.FC = () => {
                         </button>
                     ))}
                 </div>
-                {/* Add Task Button */}
+
+                {/* 添加任務按鈕 */}
                 <button
                     className="mb-6 px-6 py-3 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center cursor-pointer whitespace-nowrap select-none btn-primary"
                     onClick={() => setShowAddModal(true)}
@@ -153,9 +336,15 @@ const App: React.FC = () => {
                     <i className="fas fa-plus mr-2"></i>
                     新增任務
                 </button>
-                {/* Task List */}
+
+                {/* 任務列表 */}
                 <div className="space-y-3 sm:space-y-4">
-                    {filteredTasks.length > 0 ? (
+                    {isTasksLoading ? (
+                        <div className="text-center py-8">
+                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
+                            <p className="mt-2 text-gray-600">加載任務中...</p>
+                        </div>
+                    ) : filteredTasks.length > 0 ? (
                         filteredTasks.map(task => (
                             <div
                                 key={task.id}
@@ -164,18 +353,26 @@ const App: React.FC = () => {
                                 }`}
                             >
                                 <div className="flex items-start sm:items-center w-full sm:w-auto mb-3 sm:mb-0">
-                                    <button
-                                        className={`w-6 h-6 rounded-full border-2 mr-4 flex-shrink-0 flex items-center justify-center cursor-pointer select-none btn-check ${
-                                            task.completed
-                                                ? 'bg-green-500 border-green-500'
-                                                : 'border-gray-300'
-                                        }`}
-                                        onClick={() => toggleComplete(task.id)}
-                                    >
-                                        {task.completed && (
-                                            <i className="fas fa-check text-white text-sm"></i>
+                                    <div className="relative mr-4">
+                                        <button
+                                            className={`w-7 h-7 rounded-full border-2 flex-shrink-0 flex items-center justify-center cursor-pointer select-none btn-check ${
+                                                task.completed
+                                                    ? 'bg-green-500 border-green-500'
+                                                    : 'border-gray-400 hover:border-indigo-500 hover:shadow-md'
+                                            }`}
+                                            onClick={() => toggleComplete(task.id)}
+                                        >
+                                            {task.completed && (
+                                                <i className="fas fa-check text-white text-sm"></i>
+                                            )}
+                                        </button>
+                                        {!task.completed && (
+                                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                                            </span>
                                         )}
-                                    </button>
+                                    </div>
                                     <div className="flex-1 min-w-0">
                                         <p 
                                             className={`text-gray-800 break-words ${task.completed ? 'line-through' : ''}`}
@@ -183,20 +380,33 @@ const App: React.FC = () => {
                                             {task.text}
                                         </p>
                                         <div className="flex flex-wrap items-center mt-1 gap-2">
-                                            <span className="text-sm text-gray-500">
-                                                <i className="far fa-calendar-alt mr-1"></i>
-                                                {task.dueDate}
+                                            <span className={`text-sm ${
+                                                task.completed ? 'text-gray-500' :
+                                                isOverdue(task.dueDate) ? 'text-red-500 font-medium' :
+                                                isUpcoming(task.dueDate) ? 'text-orange-500 font-medium' :
+                                                'text-gray-500'
+                                            }`}>
+                                                <i className={`${
+                                                    isOverdue(task.dueDate) && !task.completed ? 'fas fa-exclamation-circle mr-1' :
+                                                    'far fa-calendar-alt mr-1'
+                                                }`}></i>
+                                                {formatDate(task.dueDate)}
+                                                {isUpcoming(task.dueDate) && !task.completed && 
+                                                    <span className="ml-1 text-xs font-medium bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">即將到期</span>
+                                                }
+                                                {isOverdue(task.dueDate) && !task.completed && 
+                                                    <span className="ml-1 text-xs font-medium bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">已過期</span>
+                                                }
                                             </span>
                                             <span
-                                                className={`text-sm px-2 py-1 rounded-full ${
-                                                    task.priority === 'high'
-                                                        ? 'bg-red-100 text-red-600'
-                                                        : task.priority === 'medium'
-                                                            ? 'bg-yellow-100 text-yellow-600'
-                                                            : 'bg-green-100 text-green-600'
+                                                className={`text-sm px-2 py-1 rounded-full flex items-center ${
+                                                    categoryColors[task.category]?.bg || 'bg-gray-100'
+                                                } ${
+                                                    categoryColors[task.category]?.text || 'text-gray-600'
                                                 }`}
                                             >
-                                                {task.priority}
+                                                <i className={`${categoryColors[task.category]?.icon || 'fas fa-tag'} mr-1`}></i>
+                                                {task.category}
                                             </span>
                                         </div>
                                     </div>
@@ -220,7 +430,8 @@ const App: React.FC = () => {
                     )}
                 </div>
             </div>
-            {/* Add Task Modal */}
+
+            {/* 添加任務模態框 */}
             {showAddModal && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
                     <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 w-full max-w-md shadow-xl border border-slate-200">
@@ -233,25 +444,29 @@ const App: React.FC = () => {
                             className="w-full px-3 sm:px-4 py-2 rounded-lg border border-slate-300 mb-3 sm:mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 placeholder-slate-400"
                         />
                         <div className="mb-4 sm:mb-5">
-                            <label className="block text-gray-700 mb-2">優先級別</label>
+                            <label className="block text-gray-700 mb-2">截止日期</label>
+                            <input
+                                type="date"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                className="w-full px-3 sm:px-4 py-2 rounded-lg border border-slate-300 mb-3 sm:mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                            />
+                        </div>
+                        <div className="mb-4 sm:mb-5">
+                            <label className="block text-gray-700 mb-2">類別</label>
                             <div className="flex flex-wrap gap-2">
-                                {[
-                                    { key: 'low', label: '低' },
-                                    { key: 'medium', label: '中' },
-                                    { key: 'high', label: '高' }
-                                ].map(({ key, label }) => (
+                                {Object.keys(categoryColors).map((category) => (
                                     <button
-                                        key={key}
-                                        className={`px-3 sm:px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap select-none ${
-                                            selectedPriority === key
+                                        key={category}
+                                        className={`px-3 sm:px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap select-none flex items-center ${
+                                            selectedCategory === category
                                                 ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700 btn-primary'
-                                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 btn-white'
+                                                : `${categoryColors[category].bg} ${categoryColors[category].text} hover:opacity-80 btn-white`
                                         }`}
-                                        onClick={() => 
-                                            setSelectedPriority(key as 'low' | 'medium' | 'high')
-                                        }
+                                        onClick={() => setSelectedCategory(category)}
                                     >
-                                        {label}
+                                        <i className={`${categoryColors[category].icon} mr-1`}></i>
+                                        {category}
                                     </button>
                                 ))}
                             </div>
@@ -276,4 +491,14 @@ const App: React.FC = () => {
         </div>
     );
 };
-export default App
+
+// 包裝App組件使用AuthProvider
+const App: React.FC = () => {
+    return (
+        <AuthProvider>
+            <AppContent />
+        </AuthProvider>
+    );
+};
+
+export default App;

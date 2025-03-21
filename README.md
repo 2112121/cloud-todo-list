@@ -1,12 +1,24 @@
-# React + Vite
+# 雲端待辦事項清單
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一個使用React、TypeScript和Firebase構建的現代化待辦事項清單應用程序。
 
-Currently, two official plugins are available:
+## 功能特點
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **用戶認證**: 通過電子郵件/密碼進行安全登錄和註冊
+- **待辦事項管理**: 創建、查看、編輯和刪除任務
+- **即時同步**: 數據通過Firebase Firestore實時更新
+- **響應式設計**: 適配各種設備大小，從移動設備到桌面
+- **個人資料**: 用戶資料管理和設置
 
-## Expanding the ESLint configuration
+## 技術棧
 
-If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **前端框架**: React 18+ 與 TypeScript
+- **樣式**: Tailwind CSS 和 Font Awesome 圖標
+- **後端服務**: Firebase (Authentication, Firestore, Hosting)
+- **構建工具**: Vite
+
+## 開始使用
+
+### 在線訪問
+
+應用程式已部署至：[https://cloud-todo-list-6116a.web.app](https://cloud-todo-list-6116a.web.app)
