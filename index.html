@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no" />
+    <title>待辦事項清單</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+      /* 按鈕默認樣式 */
+      .btn-white { 
+        background-color: white !important; 
+        color: #4B5563 !important; 
+        border: 1px solid #E5E7EB !important;
+      }
+      
+      .btn-primary { 
+        background-color: #4F46E5 !important; 
+        color: white !important; 
+        border-color: #4F46E5 !important;
+      }
+      
+      .btn-delete { 
+        color: #9CA3AF !important; 
+      }
+      .btn-delete:hover { 
+        color: #EF4444 !important; 
+      }
+      
+      .btn-check { 
+        background-color: transparent !important; 
+      }
+      
+      /* 解決按鈕點擊時的問題 */
+      .btn-white:active { 
+        background-color: #4F46E5 !important; 
+        color: white !important; 
+        border-color: #4F46E5 !important;
+      }
+      
+      .btn-delete:active { 
+        background-color: #EF4444 !important; 
+        color: white !important; 
+      }
+      
+      .btn-primary:active { 
+        background-color: #3730A3 !important; 
+        color: white !important; 
+      }
+      
+      .btn-check:active { 
+        background-color: #4F46E5 !important; 
+        border-color: #4F46E5 !important; 
+        color: white !important; 
+      }
+      
+      /* 防止文字選中 */
+      button { 
+        user-select: none; 
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+      }
+      
+      /* 全局樣式調整 */
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
