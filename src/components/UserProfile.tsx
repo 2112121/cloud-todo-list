@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
-import { logoutUser } from '../firebase';
+import { logout } from '../firebase';
 
 interface UserProfileProps {
   user: User | null;
@@ -21,7 +21,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onLogout, showMenu, tog
 
   const handleLogout = async () => {
     try {
-      await logoutUser();
+      await logout();
       onLogout();
     } catch (error) {
       console.error('登出失敗:', error);

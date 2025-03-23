@@ -1,35 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithGoogle, loginWithEmail, registerWithEmail, checkFirebaseAuthConfig } from '../firebase';
+import { signInWithGoogle, loginWithEmail, registerWithEmail } from '../firebase';
 
 interface AuthProps {
-  onLogin: () => void;
+  onLoginSuccess: (user: any) => void;
+  onError: (error: any) => void;
 }
 
-const Auth: React.FC<AuthProps> = ({ onLogin }) => {
+const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onError }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [configStatus, setConfigStatus] = useState<boolean | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [googleEnabled, setGoogleEnabled] = useState(true);
 
-  // 檢查 Firebase 配置
+  // 檢查是否啟用Google登錄
   useEffect(() => {
-    const checkConfig = async () => {
+    const checkGoogleAuth = async () => {
       try {
-        const isConfigured = await checkFirebaseAuthConfig();
-        setConfigStatus(isConfigured);
+        setGoogleEnabled(true);
       } catch (error) {
-        console.error("Firebase 配置檢查錯誤:", error);
-        setConfigStatus(false);
-      } finally {
-        setInitialLoading(false);
+        console.error("Failed to check auth config:", error);
+        setGoogleEnabled(false);
       }
     };
 
-    checkConfig();
+    checkGoogleAuth();
   }, []);
 
   // 處理 Google 登錄
@@ -38,13 +35,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       setLoading(true);
       setError('');
       
-      if (!configStatus) {
-        setError('Firebase 認證服務未正確配置，請使用電子郵件登錄');
+      if (!googleEnabled) {
+        setError('Google 登錄未正確配置，請使用電子郵件登錄');
         return;
       }
       
       await signInWithGoogle();
-      onLogin();
+      onLoginSuccess(true);
     } catch (err: any) {
       console.error('Google 登錄錯誤:', err);
       
@@ -61,7 +58,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         setError('網絡連接失敗，請檢查您的網絡連接');
       } else if (err.message === '認證服務未初始化') {
         setError('Firebase 認證服務未初始化，請聯系管理員');
-        setConfigStatus(false);
       } else {
         setError(err.message || '登入失敗，請重試');
       }
@@ -83,11 +79,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       setLoading(true);
       setError('');
       
-      if (!configStatus) {
-        setError('Firebase 認證服務未正確配置，請聯系管理員');
-        return;
-      }
-      
       if (isRegistering) {
         if (!displayName) {
           setError('請填寫顯示名稱');
@@ -99,7 +90,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         await loginWithEmail(email, password);
       }
       
-      onLogin();
+      onLoginSuccess(true);
     } catch (err: any) {
       console.error('電子郵件認證錯誤:', err);
       
@@ -116,14 +107,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         setError('登錄嘗試次數過多，請稍後重試');
       } else if (err.code === 'auth/configuration-not-found') {
         setError('Firebase 認證未正確配置，請聯系管理員');
-        setConfigStatus(false);
       } else if (err.code === 'auth/operation-not-allowed') {
         setError('電子郵件/密碼認證方法未在 Firebase 控制台啟用。請聯系管理員開啟此功能。');
       } else if (err.code === 'auth/network-request-failed') {
         setError('網絡連接失敗，請檢查您的網絡連接');
       } else if (err.message === '認證服務未初始化') {
         setError('Firebase 認證服務未初始化，請聯系管理員');
-        setConfigStatus(false);
       } else {
         setError(err.message || (isRegistering ? '註冊失敗' : '登入失敗'));
       }
@@ -133,12 +122,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   // 顯示加載狀態
-  if (initialLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-slate-100 to-white">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
-          <p className="mt-4 text-gray-600">正在初始化認證服務...</p>
+          <p className="mt-4 text-gray-600">正在處理認證...</p>
         </div>
       </div>
     );
@@ -150,18 +139,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">
           {isRegistering ? '創建帳號' : '登入帳號'}
         </h1>
-        
-        {!configStatus && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 text-yellow-600 rounded-lg">
-            <div className="flex items-center mb-1">
-              <i className="fas fa-exclamation-triangle mr-2"></i>
-              <strong>警告：</strong>
-            </div>
-            <p className="text-sm">
-              Firebase 認證服務似乎未正確配置。您可能需要檢查 API 密鑰或者聯系網站管理員。
-            </p>
-          </div>
-        )}
         
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
@@ -223,7 +200,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <div className="mt-4">
           <button
             onClick={handleGoogleSignIn}
-            disabled={loading || !configStatus}
+            disabled={loading || !googleEnabled}
             className="w-full py-2 px-4 bg-white border border-slate-300 text-gray-700 rounded-lg hover:bg-slate-50 flex items-center justify-center font-medium disabled:opacity-50 auth-google-button"
           >
             <i className="fab fa-google mr-2 text-[#4285F4]"></i>
@@ -231,12 +208,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </button>
         </div>
         
-        <div className="mt-6 text-center">
+        <div className="text-center mt-4">
           <button
             onClick={() => setIsRegistering(!isRegistering)}
-            className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+            className={isRegistering ? "text-indigo-600 hover:text-indigo-800 font-medium underline px-4 py-2 rounded-lg text-base" : "signup-button"}
           >
-            {isRegistering ? '已有帳號？登入' : '沒有帳號？註冊'}
+            {isRegistering ? '已有帳號？點此登入' : '沒有帳號？點此註冊'}
           </button>
         </div>
       </div>

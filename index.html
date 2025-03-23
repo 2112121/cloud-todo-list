@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>待辦事項清單</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -81,5 +84,20 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // 強制刷新頁面緩存
+      window.onload = function() {
+        if (!localStorage.getItem('lastRefresh') || 
+            (Date.now() - localStorage.getItem('lastRefresh') > 10000)) { // 10秒
+          localStorage.setItem('lastRefresh', Date.now());
+          if (!location.hash) {
+            location.reload(true);
+          }
+        }
+        
+        // 只在控制台顯示版本信息
+        console.log('應用版本: ' + new Date().toISOString());
+      };
+    </script>
   </body>
 </html>

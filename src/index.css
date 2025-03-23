@@ -191,3 +191,35 @@ button:focus-visible {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
   transform: scale(1.05);
 }
+
+/* 註冊按鈕樣式 */
+.signup-button {
+  border: 2px solid #4f46e5;
+  background-color: white;
+  color: #4f46e5 !important;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: pulse 2s infinite;
+}
+
+.signup-button:hover {
+  background-color: #4f46e5;
+  color: white !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+  }
+}
